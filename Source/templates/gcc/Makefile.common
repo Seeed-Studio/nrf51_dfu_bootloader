@@ -32,13 +32,13 @@ endif
 CPU := cortex-m0
 
 # Toolchain commands
-CC       		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-gcc"
-AS       		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-as"
-AR       		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-ar" -r
-LD       		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-ld"
-NM       		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-nm"
-OBJDUMP  		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-objdump"
-OBJCOPY  		:= "$(GNU_INSTALL_ROOT)/bin/$(GNU_PREFIX)-objcopy"
+CC       		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-gcc"
+AS       		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-as"
+AR       		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-ar" -r
+LD       		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-gcc"
+NM       		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-nm"
+OBJDUMP  		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-objdump"
+OBJCOPY  		:= "$(GNU_INSTALL_BIN)$(GNU_PREFIX)-objcopy"
 
 MK 				:= mkdir
 RM 				:= rm -rf
@@ -50,19 +50,19 @@ C_SOURCE_FILES += system_$(DEVICESERIES).c
 ASSEMBLER_SOURCE_FILES += gcc_startup_$(DEVICESERIES).s
 
 # Linker flags
-#LDFLAGS += -L"$(GNU_INSTALL_ROOT)/arm-none-eabi/lib/armv6-m"
-#LDFLAGS += -L"$(GNU_INSTALL_ROOT)/lib/gcc/arm-none-eabi/$(GNU_VERSION)/armv6-m"
+LDFLAGS += -Wl,--gc-sections --specs=nano.specs
 LDFLAGS += -Xlinker -Map=$(LISTING_DIRECTORY)/$(OUTPUT_FILENAME).map
-LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT) 
+LDFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -L $(TEMPLATE_PATH) -T$(LINKER_SCRIPT)
 
 # Compiler flags
 CFLAGS += -mcpu=$(CPU) -mthumb -mabi=aapcs -D$(DEVICE) -D$(BOARD) -D$(TARGET_CHIP) --std=gnu99
 CFLAGS += -Wall -Werror
 CFLAGS += -mfloat-abi=soft
+CFLAGS += -fno-common -fmessage-length=0 -fno-exceptions -ffunction-sections -fdata-sections
 
 # Assembler flags
 ASMFLAGS += -x assembler-with-cpp
- 
+
 INCLUDEPATHS += -I"../"
 INCLUDEPATHS += -I"$(SDK_PATH)Include"
 INCLUDEPATHS += -I"$(SDK_PATH)Include/gcc"
@@ -99,8 +99,8 @@ debug:    $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRE
 
 .PHONY: release
 release: clean
-release:  CFLAGS += -DNDEBUG -O3
-release:  ASMFLAGS += -DNDEBUG -O3
+release:  CFLAGS += -DNDEBUG -Os
+release:  ASMFLAGS += -DNDEBUG -Os
 release:  $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).bin $(OUTPUT_BINARY_DIRECTORY)/$(OUTPUT_FILENAME).hex
 
 echostuff:

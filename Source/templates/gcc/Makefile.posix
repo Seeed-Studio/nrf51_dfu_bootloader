@@ -1,4 +1,2 @@
-GNU_INSTALL_ROOT := /usr/local/gcc-arm-none-eabi-4_8-2014q1
-GNU_VERSION := 4.8.3
+GNU_INSTALL_BIN := 
 GNU_PREFIX := arm-none-eabi
-
