@@ -53,6 +53,8 @@
 #include "softdevice_handler.h"
 #include "pstorage_platform.h"
 
+#define BOOTLOADER_DFU_START 0xB1
+
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                                       /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
 #define BOOTLOADER_BUTTON_PIN           BUTTON                                                  /**< Button used to enter SW update mode. */
@@ -225,6 +227,8 @@ int main(void)
 {
     uint32_t err_code;
     bool     bootloader_is_pushed = false;
+    bool     application_to_bootloader = false;
+    uint32_t gpregret;
 
     leds_init();
 
@@ -238,9 +242,15 @@ int main(void)
     ble_stack_init();
     scheduler_init();
 
+    sd_power_gpregret_get(&gpregret);
+    if ((gpregret & BOOTLOADER_DFU_START) == BOOTLOADER_DFU_START) {
+        sd_power_gpregret_clr(BOOTLOADER_DFU_START);
+        application_to_bootloader = true;
+    }
+
     bootloader_is_pushed = ((nrf_gpio_pin_read(BOOTLOADER_BUTTON_PIN) == 0)? true: false);
 
-    if (bootloader_is_pushed || (!bootloader_app_is_valid(DFU_BANK_0_REGION_START)))
+    if (application_to_bootloader || bootloader_is_pushed || (!bootloader_app_is_valid(DFU_BANK_0_REGION_START)))
     {
         // Initiate an update of the firmware.
         err_code = bootloader_dfu_start();
