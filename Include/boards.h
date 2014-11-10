@@ -20,8 +20,12 @@
   #include "boards/pca10001.h"
 #elif defined(BOARD_PCA10003)
   #include "boards/pca10003.h"
-#elif defined(BOARD_ARCH_BLE)
+#elif defined(ARCH_BLE)
   #include "boards/arch_ble.h"
+#elif defined(BLE_SMURFS)
+  #include "boards/ble_smurfs.h"
+#elif defined(GROVE_NODE)
+  #include "boards/grove_node.h"
 #else
 #error "Board is not defined"
 #endif
