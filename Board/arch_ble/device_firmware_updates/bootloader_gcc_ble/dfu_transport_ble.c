@@ -35,7 +35,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#define ADVERTISING_LED_PIN_NO               LED                                                     /**< Is on when device is advertising. */
+#define ADVERTISING_LED_PIN_NO               LED_0                                                   /**< Is on when device is advertising. */
 
 #define DEVICE_NAME                          "DfuTarg"                                               /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                    "NordicSemiconductor"                                   /**< Manufacturer. Will be passed to Device Information Service. */

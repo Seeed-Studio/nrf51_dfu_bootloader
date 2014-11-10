@@ -52,12 +52,14 @@
 #include "ble_debug_assert_handler.h"
 #include "softdevice_handler.h"
 #include "pstorage_platform.h"
+#include "nrf_delay.h"
 
-#define BOOTLOADER_DFU_START 0xB1
+#define APP_TO_BOOTLOADER_FLAG          0xB1
+#define APP_RESET_TO_BOOTLOADER_FLAG    0x02
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT 0                                                       /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
-#define BOOTLOADER_BUTTON_PIN           BUTTON                                                  /**< Button used to enter SW update mode. */
+#define BOOTLOADER_BUTTON_PIN           BUTTON_PIN                                              /**< Button used to enter SW update mode. */
 
 #define APP_GPIOTE_MAX_USERS            1                                                       /**< Number of GPIOTE users in total. Used by button module and dfu_transport_serial module (flow control). */
 
@@ -116,13 +118,12 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 }
 
 
-/**@brief Function for initialization of LEDs.
- *
+/**@brief Function for initialization of LEDs.  *
  * @details Initializes all LEDs used by the application.
  */
 static void leds_init(void)
 {
-    nrf_gpio_cfg_output(LED);
+    nrf_gpio_cfg_output(LED_0);
 }
 
 
@@ -132,7 +133,7 @@ static void leds_init(void)
  */
 static void leds_off(void)
 {
-    nrf_gpio_pin_clear(LED);
+    nrf_gpio_pin_clear(LED_0);
 }
 
 
@@ -182,30 +183,28 @@ static void sys_evt_dispatch(uint32_t event)
  *
  * @details Initializes the SoftDevice and the BLE event interrupt.
  */
-static void ble_stack_init(void)
+static void ble_stack_init(bool init_softdevice)
 {
-    uint32_t err_code;
-
-#ifndef S310_STACK
-    sd_mbr_command_t com = {SD_MBR_COMMAND_INIT_SD, };
-
-    err_code = sd_mbr_command(&com);
-    APP_ERROR_CHECK(err_code);
+    uint32_t         err_code;
+    
+    if (init_softdevice)
+    {
+        sd_mbr_command_t com = {SD_MBR_COMMAND_INIT_SD, };
+        err_code = sd_mbr_command(&com);
+        APP_ERROR_CHECK(err_code);
+    }
 
     err_code = sd_softdevice_vector_table_base_set(BOOTLOADER_REGION_START);
     APP_ERROR_CHECK(err_code);
-#endif // S310_STACK
 
     SOFTDEVICE_HANDLER_INIT(NRF_CLOCK_LFCLKSRC_XTAL_20_PPM, true);
 
-#ifndef S310_STACK
     // Enable BLE stack
     ble_enable_params_t ble_enable_params;
     memset(&ble_enable_params, 0, sizeof(ble_enable_params));
     ble_enable_params.gatts_enable_params.service_changed = IS_SRVC_CHANGED_CHARACT_PRESENT;
     err_code = sd_ble_enable(&ble_enable_params);
     APP_ERROR_CHECK(err_code);
-#endif // S310_STACK
 
     err_code = softdevice_sys_evt_handler_set(sys_evt_dispatch);
     APP_ERROR_CHECK(err_code);
@@ -219,38 +218,104 @@ static void scheduler_init(void)
     APP_SCHED_INIT(SCHED_MAX_EVENT_DATA_SIZE, SCHED_QUEUE_SIZE);
 }
 
-extern uint32_t m_uicr_bootloader_start_address;
+void button_init(void)
+{
+    nrf_gpio_cfg_sense_input(BUTTON_PIN, BUTTON_PULL, NRF_GPIO_PIN_SENSE_LOW);
+}
+
+int button_is_down(void)
+{
+    return nrf_gpio_pin_read(BUTTON_PIN) == BUTTON_DOWN;
+}
+
+int button_detect(void)
+{
+    int t = 0;
+
+    while (1) {
+        if (!button_is_down()) {
+            if (t < 30) {
+                return 0;     // for anti shake
+            } else {
+                break;
+            }
+        }
+
+        if (t > 30000) {        // More than 3 seconds
+            return -1;          // long click
+        }
+
+        t++;
+        nrf_delay_us(100);
+    }
+
+    if (t > 4000) {             // More than 0.4 seconds
+        return 1;               // single click
+    }
+
+    while (true) {
+        if (button_is_down()) {
+            nrf_delay_us(1000);
+            if (button_is_down()) {
+                return 2;      // double click
+            }
+
+            t += 10;
+        }
+
+        if (t > 4000) {
+            return 1;          // The interval of double click should less than 0.4 seconds, so it's single click
+        }
+
+        t++;
+        nrf_delay_us(100);
+    }
+}
+
+extern uint32_t m_uicr_bootloader_start_address;        // should be used at least once, which prevent compiler from discarding the variable
 
 /**@brief Function for application main entry.
  */
 int main(void)
 {
     uint32_t err_code;
-    bool     bootloader_is_pushed = false;
-    bool     application_to_bootloader = false;
-    uint32_t gpregret;
+    bool     dfu_start = false;
+    bool     app_to_bootloader = false;
+    uint32_t flag;
+    
+    flag = NRF_POWER->GPREGRET;
+    if ((flag & APP_TO_BOOTLOADER_FLAG) == APP_TO_BOOTLOADER_FLAG) {
+        NRF_POWER->GPREGRET = 0x00;
+        app_to_bootloader = true;
+        dfu_start = true;
+    } else if ((flag & APP_RESET_TO_BOOTLOADER_FLAG) == APP_RESET_TO_BOOTLOADER_FLAG) {
+        NRF_POWER->GPREGRET = 0x00;
+        dfu_start = true;
+    }
 
     leds_init();
+    
+    if (!dfu_start) {
+        int click;
+        
+        button_init();
+        click = button_detect();
+        if (click != 0) {
+            dfu_start = true;
+        }
+    }
 
     APP_ERROR_CHECK_BOOL(m_uicr_bootloader_start_address == BOOTLOADER_REGION_START);
     APP_ERROR_CHECK_BOOL(NRF_FICR->CODEPAGESIZE == CODE_PAGE_SIZE);
 
     // Initialize.
     timers_init();
-    gpiote_init();
-    buttons_init();
-    ble_stack_init();
+    
     scheduler_init();
+    
+    ble_stack_init(!app_to_bootloader);
 
-    sd_power_gpregret_get(&gpregret);
-    if ((gpregret & BOOTLOADER_DFU_START) == BOOTLOADER_DFU_START) {
-        sd_power_gpregret_clr(BOOTLOADER_DFU_START);
-        application_to_bootloader = true;
-    }
-
-    bootloader_is_pushed = ((nrf_gpio_pin_read(BOOTLOADER_BUTTON_PIN) == 0)? true: false);
-
-    if (application_to_bootloader || bootloader_is_pushed || (!bootloader_app_is_valid(DFU_BANK_0_REGION_START)))
+    if (dfu_start || (!bootloader_app_is_valid(DFU_BANK_0_REGION_START)))
     {
         // Initiate an update of the firmware.
         err_code = bootloader_dfu_start();
