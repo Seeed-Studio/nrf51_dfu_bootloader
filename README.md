@@ -15,3 +15,7 @@ make
 ```
 
 Note that the bootloader address was set to 0x3C000 to give the bootloader only 16KB flash, so code optimization is enabled.
+
+
+
+[![Analytics](https://ga-beacon.appspot.com/UA-46589105-3/nrf51_dfu_bootloader)](https://github.com/igrigorik/ga-beacon)
